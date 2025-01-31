@@ -1,6 +1,7 @@
 # Homework
 - [Task 2. Microservice modeling](#task-2-microservice-modeling)
 - [Task 5. Microservices communication p. 2](#task-5-microservices-communication-p-2)
+- [Task 8. Scaling and caching](#8-scaling-and-caching)
 
 # Task 2 Microservice modeling
 ## 1. UML domain class diagram [Click here to view the diagram.](https://www.mermaidchart.com/raw/22938670-8cc5-41cc-a3b0-4bfda2abec12?theme=light&version=v0.1&format=svg)
@@ -457,3 +458,77 @@ sequenceDiagram
         Frontend->>User: Notify product unavailable
     end
 ```
+
+## 8. Scaling and caching
+Analyze service load, providing scaling plan and cache integration.
+
+If the system load increases by 1000 times of the number of users, based on the [Task 2. Microservice modeling](#task-2-microservice-modeling), we can improve our system with the optimizations like horizontal scaling, load balancing, adding cache layers and database replications.
+
+```mermaid
+C4Context
+
+title E-Commerce System Scaling & Caching
+
+Person(user, "User", "Interacts with the system")
+
+System_Boundary(ECommerceSystem, "E-Commerce System") {
+    Container(UserService, "User Service", "Handles user accounts, roles, and localization", "Load Balancer + Auto Scaling")
+    Container(CatalogService, "Catalog Service", "Manages categories")
+    Container(ProductService, "Product Service", "Manages products, brands, and SKUs")
+    Container(CartService, "Cart Service", "Handles product calculations", "Redis Cache + Load Balancer")
+    Container(SupplierService, "Supplier Service", "Manages suppliers")
+    Container(BlogService, "Blog Service", "Handles blogs and comments", "Read Replica DB")
+    Container(TaxService, "Taxation Service", "Manages tax rules", "Cached Tax Rules")
+    Container(DiscountService, "Discount Service", "Handles discounts", "Precomputed Discounts Cache")
+    Container(LocalizationService, "Localization Service", "Handles translations, countries, and currencies", "CDN + Redis Cache + Load Balancer")
+    Container(ReviewService, "Review Service", "Handles product reviews and ratings", "NoSQL DB + Cache")
+    Container(CDN, "CDN", "Serves static translations")
+    Container(Redis, "Redis Cache", "Caches translations and exchange rates")
+    Container(DBReplica, "Replica Database", "Reads translations from replica DB")
+    Container(NoSQLDB, "NoSQL DB", "Stores reviews")
+}
+
+Rel(user, CartService, "Adds products to cart")
+Rel(user, ProductService, "Views products")
+Rel(user, LocalizationService, "Requests translations & currency conversion")
+Rel(user, UserService, "Manages account settings")
+Rel(CartService, DiscountService, "Applies discounts")
+Rel(CartService, TaxService, "Applies taxes")
+Rel(CartService, LocalizationService, "Fetches exchange rates & localized prices")
+Rel(ProductService, CatalogService, "Uses category info")
+Rel(ProductService, SupplierService, "Uses supplier info")
+Rel(ProductService, LocalizationService, "Fetches translations")
+Rel(CatalogService, LocalizationService, "Fetches translations")
+Rel(UserService, LocalizationService, "Determines user locale & language")
+
+Rel(LocalizationService, CDN, "Serves static translations")
+Rel(LocalizationService, Redis, "Caches translations and exchange rates")
+Rel(LocalizationService, DBReplica, "Reads translations from replica DB")
+Rel(BlogService, DBReplica, "Reads comments from replica DB")
+Rel(ReviewService, NoSQLDB, "Stores reviews in NoSQL DB")
+
+System_Ext(API_Gateway, "API Gateway", "Manages caching and load balancing")
+Rel(API_Gateway, LocalizationService, "Caches frequent translations & exchange rates")
+Rel(API_Gateway, CartService, "Caches cart calculations")
+Rel(API_Gateway, ProductService, "Caches top viewed products")
+
+```
+By the diagram, we can see that the most load services are:
+1. **LocalizationService** with the user increasing also increases the load for the translations and regional user configurations and currencies
+2. **UserService** Each user has their account, roles, settings, etc. UserService also interacts with LocalizationService to determine the user’s language settings and country localization (increasing proportionally to the number of users)
+3. **ProductService** searching and viewing products
+4. **CartService** communications with the DiscountService, TaxService, and LocalizationService, handles discount and tax calculations based on the localization configurations
+
+### Scaling plan
+1. Horizontal auto-scaling for UserService, ProductService, and CatalogService - automatically scale based on load using load balancers. If the number of requests increases, they can dynamically increase the number of service instances to handle the traffic. DB sharding, CDN for the images
+2. CDN for LocalizationService - translations can be stored in a CDN for fast static data delivery.
+3. Load balancing - for distributing requests between instances (using rate limits for the example)
+4. DB distributing on the write/read replicas (update/create/delete works only with base DB instance)
+
+### Caching plan
+1. Redis Cache for the LocalizationService - cache translations and exchange rates. This will significantly reduce the load on the database and servers, as well as improve response speed for users.
+2. Redis Cache for the CartService - Redis can be used to cache calculation results (e.g., discounts, taxes, exchange rates) to avoid repeating calculations on each request.
+3. ProductService - caching frequently requested products and categories can be done via API Gateway or Redis to reduce the load on the database.
+4. DiscountService and TaxService - precomputed discounts and tax rates for each user can be cached to reduce the load on these services.
+
+It is also necessary to pay attention to the cache TTL and update policies.
