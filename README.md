@@ -1,4 +1,4 @@
-# Homework
+# Robot Dreams Microservices Homework
 - [Task 2. Microservice modeling](#task-2-microservice-modeling)
 - [Task 5. Microservices communication p. 2](#task-5-microservices-communication-p-2)
 - [Task 8. Scaling and caching](#8-scaling-and-caching)
