@@ -2,6 +2,7 @@
 - [Task 2. Microservice modeling](#task-2-microservice-modeling)
 - [Task 5. Microservices communication p. 2](#task-5-microservices-communication-p-2)
 - [Task 8. Scaling and caching](#8-scaling-and-caching)
+- [Task 11. Deployment](#11-deployment)
 
 # Task 2 Microservice modeling
 ## 1. UML domain class diagram [Click here to view the diagram.](https://www.mermaidchart.com/raw/22938670-8cc5-41cc-a3b0-4bfda2abec12?theme=light&version=v0.1&format=svg)
@@ -532,3 +533,81 @@ By the diagram, we can see that the most load services are:
 4. DiscountService and TaxService - precomputed discounts and tax rates for each user can be cached to reduce the load on these services.
 
 It is also necessary to pay attention to the cache TTL and update policies.
+
+## 11. Deployment
+Below is a detailed CI/CD process for the **Order Service**:
+
+### 11.1 Service CI/CD process description
+
+**Continuous Integration (CI) Process**
+
+**1. Code Integration and Version Control**:
+- Developers push feature branches to the remote repository.
+- Pull Requests/Merge Requests are created for code review before merging into the main branch.
+- Code reviewer ensures changes with the coding standards and best practices.
+
+**2. Pull Requests/Merge Requests Tests**:
+- Check Code Formatting and Linting
+- Code and Security Analysis
+- Unit Tests
+
+**3. Build Process**
+- Build artifact
+- Version Tagging
+- Run Integration Tests (Validates Order Service integration with mocked or test containerized versions of external services like Kafka, PostgreSQL, CDC/Debezium.
+- Docker Image Build
+- Store the build artifacts in a centralized artifact registry/repository
+
+**Continuous Deployment (CD) Process**
+
+Deployment to the stage
+- Deployment to Staging (based on the separated environment from production)
+- Continuous Delivery to the staging container registry
+- Deploy Microservice
+- Database Migrations
+- Run Smoke and Functional Tests
+- Test the service end-to-end in the staging environment
+
+Deployment to Production (Manual approval)
+- Deploy process with **blue-green** or **canary deployment** techniques
+- Database Migrations on Production
+- Ensure app metrics, logs, alerts and traces are configured using tools like Prometheus, Grafana, and Elastic Stack (ELK).
+
+### 11.2 Service type choose
+Below described just started configurations for the services Order, Payment and Inventory. 
+Follow steps should be based on the real usage and monitoring.
+
+| **Service**           | **Specifics of Work**                                                 | **Server Specification**                              |
+|-----------------------|-----------------------------------------------------------------------|-------------------------------------------------------|
+| **Order Service**     | - Handles high write throughput for order creation.                   | 2+ vCPUs, 4–8GB RAM                                   |
+|                       | - Coordinates with Payment and Inventory services.                    |                                                       |
+|                       | - Processes Kafka events.                                             |                                                       |
+|                       | - Performs database operations in PostgreSQL.                         |                                                       |
+| **Payment Service**   | - Performs critical payment processing.                               | 2–4 vCPUs, 4–8GB RAM                                  |
+|                       | - Integrates with external gateways (e.g., Stripe, PayPal).           |                                                       |
+|                       | - CPU-intensive encryption and decryption tasks.                      |                                                       |
+|                       | - Requires low-latency communication with high-security compliance.   |                                                       |
+| **Inventory Service** | - Handles stock availability and updates.                             | 2–4 vCPUs, 16–32GB RAM, memory-optimized for caching. |
+|                       | - Processes high read queries for stock levels.                       |                                                       |
+|                       | - Performs real-time updates using Kafka.                             |                                                       |
+|                       | - Benefits from caching solutions like Redis to reduce database load. |                                                       |
+
+### 11.3 Canary deployment for the Payment service
+
+**Requirements**:
+- Orchestration tool
+- A service mesh for dynamic traffic splitting
+- A monitoring to observe the performance of both versions
+- At least one stable version `v1` is running in production parallel to the canary `v2`
+
+**Deploying**:
+- The stable version deployment of the service is fully operational and receiving 100% of production traffic
+- Deploy Canary Version `v2`
+- Deploy the new version of the Payment Service `v2` alongside `v1`, but with **initially reduced replicas** (1-5% of the stable traffic)
+- Use logging and monitoring to track Latency, Error rates, Payment success rates, Resource utilization (CPU, memory)
+- Gradual Traffic Increase if no critical issues are found with the canary version `v2`, slowly increase traffic to `v2` while monitoring performance. Use a step-by-step increase in intervals (e.g., 10%, 25%, 50%, etc.)
+- If the canary `v2` demonstrates stability, switch **100% traffic** to the new version and turn off the old version `v1`
+- Rollback in case of issues with switching back 100% traffic to the old version `v1` and turn off `v2`
+
+
+
