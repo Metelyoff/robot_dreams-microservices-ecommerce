@@ -3,6 +3,7 @@
 - [Task 5. Microservices communication p. 2](#task-5-microservices-communication-p-2)
 - [Task 8. Scaling and caching](#8-scaling-and-caching)
 - [Task 11. Deployment](#11-deployment)
+- [Task 13. Authentication and Security](#13-authentication-and-security)
 
 # Task 2 Microservice modeling
 ## 1. UML domain class diagram [Click here to view the diagram.](https://www.mermaidchart.com/raw/22938670-8cc5-41cc-a3b0-4bfda2abec12?theme=light&version=v0.1&format=svg)
@@ -610,4 +611,49 @@ Follow steps should be based on the real usage and monitoring.
 - Rollback in case of issues with switching back 100% traffic to the old version `v1` and turn off `v2`
 
 
+# 13. Authentication and Security
 
+## 13.1 Describe Authentication and Authorization services
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Authentication as Authentication Service
+    participant UDB as User Database
+    participant Resource as Resource Server
+    participant Authorization as Authorization Service
+    participant DADB as Data Access Database
+
+    User ->> Authentication: Send credentials
+    Authentication ->> UDB: Validate credentials
+    UDB ->> Authentication: Return user info
+    Authentication ->> User: Return JWT token
+    User ->> Resource: Request protected resource (with JWT)
+    Resource ->> Resource: Validate JWT token
+    Resource ->> Authorization: Check user roles & permissions
+    Authorization ->> DADB: Get user roles & permissions
+    DADB ->> Authorization: Return roles & permissions
+    Authorization ->> Resource: Access granted/denied
+    Resource ->> User: Return data / Access denied
+```
+
+## 13.2 User roles examples with restrictions
+
+| **Role**     | **Description**                | **Restrictions**                                                                                         |
+|--------------|--------------------------------|----------------------------------------------------------------------------------------------------------|
+| ADMIN        | Full access                    | Two factor authentication                                                                                |
+| USER_MANAGER | Manages users                  | Without managing admin profiles. Doesn't have permission for a finance resource management (for example) |
+| USER         | Has access for the own account | Doesn't have to B2B functional                                                                           |
+| GUEST        | Viewing restricted information | Doesn't have any access for editing                                                                      |
+
+## 13.3 Which data should be coded
+
+**Coded info**:
+- User password
+- JWT Refresh Token (Database/Redis)
+- Finance information (card numbers and account number)
+- Personal data (Passport info, addresses, etc.)
+
+**Public info**: 
+- Login/username
+- Roles and permissions
