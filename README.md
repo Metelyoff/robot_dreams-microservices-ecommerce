@@ -1,6 +1,7 @@
 # Robot Dreams Microservices Homework
 - [Task 2. Microservice modeling](#task-2-microservice-modeling)
 - [Task 5. Microservices communication p. 2](#task-5-microservices-communication-p-2)
+- [Task 7. Transactions management](#7-transactions-management)
 - [Task 8. Scaling and caching](#8-scaling-and-caching)
 - [Task 11. Deployment](#11-deployment)
 - [Task 13. Authentication and Security](#13-authentication-and-security)
@@ -460,6 +461,78 @@ sequenceDiagram
         Frontend->>User: Notify product unavailable
     end
 ```
+
+## 7. Transactions management
+
+### 7.1 Payment rollback process
+The diagram uses an example of payment expired, but it can also be for the amount not being enough. The other cases (like the failed local transaction to create the payment) can be other cases, which are not described here.
+```mermaid
+sequenceDiagram
+    actor User
+    participant Browser
+    participant Order as Order service
+    participant Inventory as Inventory service
+    participant Payment as Payment service
+
+    User->>Browser: Creates the order with items and selected payment
+    Browser->>Order: Sends order request
+    Order->>Browser: 201 created with id
+    Browser->>Order: Subscribes for the order status notifications by created id via SSE
+    Order->>Inventory: Tryies reserve the items
+    alt Items reserved successfully
+    Inventory->>Order: Confirms reservation
+    Order->>Payment: Creates a payment
+    Payment->>Payment: Calculates the expired date
+    Order->>Browser: Sends ITEMS_RESERVED successfully SSE
+    Browser->>User: Displays ITEMS_RESERVED status
+    Payment->>Order: Sends successfully confirmation payment
+    Order->>Order: Changes status to PENDING_FOR_PAY
+    Order->>Browser: Sends SSE with updated order status PENDING_FOR_PAY
+    Browser->>Browser: Set expired timer based on the expartion payment date
+    Browser->>User: Displays PENDING_FOR_PAY status with timer
+    alt User pay
+    User->>Browser: Confirms the payment by clicking Pay btn
+    Browser->>Payment: Sends payment request
+    Payment->>Browser: 200 payment accepted
+    Payment->>Order: Sends the PAID status
+    Order->>Order: Updates the order status
+    Order->>Browser: Sends SSE event with the PAID status
+    Browser->>User: Displays PAID status
+    else Payment expired
+    Payment->>Order: Sends PAYMENT_EXPIRED status
+    Order->>Order: Updates order status
+    Order->>Inventory: Cancels items reservation
+    Order->>Browser: Sends SSE with PAYMENT_EXPIRED status
+    Browser->>User: Displays the PAYMENT_EXPIRED status
+    end
+    else
+    Inventory->>Order: Reservation failed by some reason
+    Order->>Payment: Sends failure event to cancel payment
+    Payment->>Order: Confirms cancellation
+    Order->>Browser: Sends SSE event with order status and message
+    Browser->>User: Displays FAILED status
+    User->>Browser: Creates new order
+    end
+```
+
+### 7.2 The item reservation logic description
+
+The item reservation logic describes on the sequence diagram above also. 
+Note: The logic for reserving an item only occurs after an order is created, not when the product is added to the cart. The product booking example is developed based on the EDD approach.
+
+1.	The user creates an order.
+2.	The order service returns the created order ID.
+3.	The frontend subscribes to notifications by order ID using SSE.
+4.	The order service requests the inventory service to validate the item quantity and price.
+5.	The inventory service validates the order item’s price and quantity. If the validation passes, it reduces the base item quantity and creates a new item reservation entity; otherwise, it sends an item reservation exception to the order service.
+6.	The order service updates its status based on the inventory service’s response.
+7.	If the item reservation is successful, the order service requests the payment service to process the pending payment. After a successful payment, the order service requests the inventory service to remove the reservation with the approved quantity; otherwise, it restores the item quantity to its previous state.
+
+### 7.3 General possible problems with the item reservations
+1. Deadlock and race condition (If two users try to reserve the last item at the same time, both may think they got it. This can cause mistakes)
+2. The system is in the out of sync state (If the inventory service reserves an item but the order service does not get a confirmation, the item might stay locked forever)
+3. The system does not cancel the reservation correctly (If the payment fails, the reservation should be removed. If this does not happen, the item stays locked)
+4. The database or cache fails (If the system saves the reservation in a temporary storage (cache) and this storage crashes, the reservation can be lost or if the system does not correctly update the cache on failures, and etc.)
 
 ## 8. Scaling and caching
 Analyze service load, providing scaling plan and cache integration.
