@@ -529,10 +529,12 @@ Note: The logic for reserving an item only occurs after an order is created, not
 7.	If the item reservation is successful, the order service requests the payment service to process the pending payment. After a successful payment, the order service requests the inventory service to remove the reservation with the approved quantity; otherwise, it restores the item quantity to its previous state.
 
 ### 7.3 General possible problems with the item reservations
-1. Deadlock and race condition (If two users try to reserve the last item at the same time, both may think they got it. This can cause mistakes)
+1. Deadlock and race condition (If two users try to reserve the last item at the same time, both may think they got it)
 2. The system is in the out of sync state (If the inventory service reserves an item but the order service does not get a confirmation, the item might stay locked forever)
 3. The system does not cancel the reservation correctly (If the payment fails, the reservation should be removed. If this does not happen, the item stays locked)
 4. The database or cache fails (If the system saves the reservation in a temporary storage (cache) and this storage crashes, the reservation can be lost or if the system does not correctly update the cache on failures, and etc.)
+5. Asynchronous communications between services (event delay, event lost, event duplication)
+
 
 ## 8. Scaling and caching
 Analyze service load, providing scaling plan and cache integration.
